@@ -107,12 +107,24 @@ def _get_auth_provider_storage() -> AsyncKeyValue | None:
         directory = settings.disk_directory or Path.cwd()
         base_store = DiskStore(directory=directory, auto_create=True)
     elif settings.type == "firestore":
-        from key_value.aio.stores.firestore import FirestoreStore
+        from key_value.aio.stores.firestore import (
+            FirestoreStore,
+            FirestoreV1CollectionSanitizationStrategy,
+            FirestoreV1KeySanitizationStrategy,
+        )
 
+        # OAuth client IDs can be URLs (Claude's is
+        # https://claude.ai/oauth/mcp-oauth-client-metadata) and Firestore
+        # document IDs cannot contain "/", so keys and collection names go
+        # through the library's Firestore-specific sanitizers.
         base_store = FirestoreStore(
             project=settings.firestore_project,
             database=settings.firestore_database,
             default_collection=settings.firestore_collection,
+            key_sanitization_strategy=FirestoreV1KeySanitizationStrategy(),
+            collection_sanitization_strategy=(
+                FirestoreV1CollectionSanitizationStrategy()
+            ),
         )
     else:
         return None

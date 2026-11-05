@@ -120,6 +120,10 @@ class AuthProviderFactoryTest(_AuthEnvTestCase):
         settings reach the constructor and the encryption wrapper is applied.
         """
         from analytics_mcp import auth
+        from key_value.aio.stores.firestore import (
+            FirestoreV1CollectionSanitizationStrategy,
+            FirestoreV1KeySanitizationStrategy,
+        )
         from key_value.aio.wrappers.encryption import FernetEncryptionWrapper
 
         env = {
@@ -137,12 +141,33 @@ class AuthProviderFactoryTest(_AuthEnvTestCase):
         ):
             store = auth._get_auth_provider_storage()
 
-        fake_store.assert_called_once_with(
-            project="tnl-mcp",
-            database="(default)",
-            default_collection="ga4_auth",
+        fake_store.assert_called_once()
+        kwargs = fake_store.call_args.kwargs
+        self.assertEqual(kwargs["project"], "tnl-mcp")
+        self.assertEqual(kwargs["database"], "(default)")
+        self.assertEqual(kwargs["default_collection"], "ga4_auth")
+        # Claude's OAuth client ID is a URL; without these, "/" in the key
+        # makes Firestore reject the document name and sign-in returns 500.
+        self.assertIsInstance(
+            kwargs["key_sanitization_strategy"],
+            FirestoreV1KeySanitizationStrategy,
+        )
+        self.assertIsInstance(
+            kwargs["collection_sanitization_strategy"],
+            FirestoreV1CollectionSanitizationStrategy,
         )
         self.assertIsInstance(store, FernetEncryptionWrapper)
+
+    def test_firestore_key_sanitizer_accepts_url_client_ids(self) -> None:
+        """The exact key that failed in production on 5 November 2026."""
+        from key_value.aio.stores.firestore import (
+            FirestoreV1KeySanitizationStrategy,
+        )
+
+        key = "https://claude.ai/oauth/mcp-oauth-client-metadata"
+        sanitized = FirestoreV1KeySanitizationStrategy().sanitize(key)
+        self.assertNotIn("/", sanitized)
+        self.assertLessEqual(len(sanitized.encode("utf-8")), 1500)
 
 
 class TokenVerifierTest(_AuthEnvTestCase, unittest.IsolatedAsyncioTestCase):
