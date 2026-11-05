@@ -69,10 +69,17 @@ class GoogleAnalyticsMCPJwtProviderSettings(BaseSettings):
 class GoogleAnalyticsMCPAuthStorageSettings(BaseSettings):
     model_config = create_settings_config(("auth", "storage"))
 
-    type: Literal["in-memory", "redis", "disk"] | None = None
+    type: Literal["in-memory", "redis", "disk", "firestore"] | None = None
     redis_url: RedisDsn | None = None
     encryption_key: SecretBytes | None = None
     disk_directory: str | None = None
+    # Firestore (Native mode) in the Google Cloud project the server runs in.
+    # Credentials come from Application Default Credentials, which on Cloud Run
+    # is the service's own service account. All three are optional: project and
+    # database fall back to the ADC project and "(default)".
+    firestore_project: str | None = None
+    firestore_database: str | None = None
+    firestore_collection: str = "mcp_auth"
 
     @model_validator(mode="after")
     def validate_modeled_fields(

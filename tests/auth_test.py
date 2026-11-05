@@ -112,6 +112,38 @@ class AuthProviderFactoryTest(_AuthEnvTestCase):
         with mock.patch.dict(os.environ, {}, clear=True):
             self.assertIsNone(auth.get_auth_provider())
 
+    def test_firestore_storage_builds_encrypted_store(self) -> None:
+        """Cloud Run deployments keep sessions in Firestore via ADC.
+
+        The real store opens a Firestore client at construction, which needs
+        credentials, so the class is replaced and only the wiring is checked:
+        settings reach the constructor and the encryption wrapper is applied.
+        """
+        from analytics_mcp import auth
+        from key_value.aio.wrappers.encryption import FernetEncryptionWrapper
+
+        env = {
+            "GOOGLE_ANALYTICS_MCP_AUTH_STORAGE_TYPE": "firestore",
+            "GOOGLE_ANALYTICS_MCP_AUTH_STORAGE_FIRESTORE_PROJECT": "tnl-mcp",
+            "GOOGLE_ANALYTICS_MCP_AUTH_STORAGE_FIRESTORE_DATABASE": "(default)",
+            "GOOGLE_ANALYTICS_MCP_AUTH_STORAGE_FIRESTORE_COLLECTION": "ga4_auth",
+        }
+        fake_store = mock.MagicMock(name="FirestoreStore")
+        with (
+            mock.patch.dict(os.environ, env),
+            mock.patch(
+                "key_value.aio.stores.firestore.FirestoreStore", fake_store
+            ),
+        ):
+            store = auth._get_auth_provider_storage()
+
+        fake_store.assert_called_once_with(
+            project="tnl-mcp",
+            database="(default)",
+            default_collection="ga4_auth",
+        )
+        self.assertIsInstance(store, FernetEncryptionWrapper)
+
 
 class TokenVerifierTest(_AuthEnvTestCase, unittest.IsolatedAsyncioTestCase):
     """TokenVerifier subclasses the SDK class, calls a bare super().__init__()

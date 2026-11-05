@@ -106,6 +106,14 @@ def _get_auth_provider_storage() -> AsyncKeyValue | None:
 
         directory = settings.disk_directory or Path.cwd()
         base_store = DiskStore(directory=directory, auto_create=True)
+    elif settings.type == "firestore":
+        from key_value.aio.stores.firestore import FirestoreStore
+
+        base_store = FirestoreStore(
+            project=settings.firestore_project,
+            database=settings.firestore_database,
+            default_collection=settings.firestore_collection,
+        )
     else:
         return None
 
